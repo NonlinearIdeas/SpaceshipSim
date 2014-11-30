@@ -137,6 +137,22 @@ def IsActionAllowed(action, subjectType):
     return False
 
 
+def GetActionCost(action):
+    if action == gaGoThroughDoor:
+        return 1
+    elif action == gaActivateDoor:
+        return 1
+    elif action == gaActivateRADoor:
+        return 1
+    elif action == gaPickUpObject:
+        return 10
+    elif action == gaActivateShuttle:
+        return 1
+    elif action == gaActivateShuttleGen:
+        return 1
+    return 25
+
+
 class WorldState(object):
     def __init__(self):
         self.SetDefaultStates()
@@ -223,7 +239,7 @@ class WorldState(object):
             # is in any of them.
             if agentRoom in sidRooms:
                 result.append(sid)
-        print "Game Room Objects: ROOM[%s] %s" % (agentRoom, result)
+                #        print "Game Room Objects: ROOM[%s] %s" % (agentRoom, result)
         return result
 
     # Generate a list of actions that the agent can execute
@@ -243,7 +259,7 @@ class WorldState(object):
                     result.append((agentID, action, sid))
         return result
 
-    def GetEffectsForAction(self,agentID,action,actionSubjectID):
+    def GetEffectsForAction(self, agentID, action, actionSubjectID):
         result = []
         if action == gaGoThroughDoor:
             agentRoom = self.worldState[agentID][kInRoom]
@@ -251,18 +267,18 @@ class WorldState(object):
             otherRoom = pr1
             if pr1 == agentRoom:
                 otherRoom = pr2
-            result.append((agentID,kInRoom,otherRoom))
+            result.append((agentID, kInRoom, otherRoom))
         elif action == gaActivateDoor:
-            result.append((self.worldState[actionSubjectID][kActivatorTarget],kIsClosed,False))
+            result.append((self.worldState[actionSubjectID][kActivatorTarget], kIsClosed, False))
         elif action == gaActivateRADoor:
             result.append((self.worldState[actionSubjectID][kActivatorTarget], kIsClosed, False))
         elif action == gaPickUpObject:
             if self.worldState[actionSubjectID][kSubjectType] == goRedDoorKey:
-                result.append((agentID,kHasRedAccess,True))
+                result.append((agentID, kHasRedAccess, True))
         elif action == gaActivateShuttle:
-            result.append((actionSubjectID,kIsActivated,True))
+            result.append((actionSubjectID, kIsActivated, True))
         elif action == gaActivateShuttleGen:
-            result.append((actionSubjectID,kIsPowered,True))
+            result.append((actionSubjectID, kIsPowered, True))
 
         # Now remove any of these that have already been met in the current world state
         result = [(sid, key, value) for (sid, key, value) in result if (key, value) not in self.worldState[sid]]
@@ -286,15 +302,17 @@ class WorldState(object):
             # NOTE:  There is also a procedural check to see if the agent has the Red Door Key.
         elif action == gaPickUpObject:
             if self.worldState[actionSubjectID][kSubjectType] == goRedDoorKey:
-                result.append((agentID,kHasRedAccess,False))
+                result.append((agentID, kHasRedAccess, False))
             pass
         elif action == gaActivateShuttle:
             result.append((sidShuttleLaunch, kIsActivated, False))
+            result.append((sidShuttleGen, kIsPowered, True))
         elif action == gaActivateShuttleGen:
             result.append((sidShuttleGen, kIsPowered, False))
 
         # Now remove any of these that have already been met in the current world state
-        result = [(sid, key, value) for (sid, key, value) in result if not self.worldState[sid].has_key(key) or self.worldState[sid][key] != value]
+        result = [(sid, key, value) for (sid, key, value) in result if
+                  not self.worldState[sid].has_key(key) or self.worldState[sid][key] != value]
         return result
 
     # Generate a list of precondition tuples that must be satisfied as world
@@ -331,9 +349,11 @@ class WorldState(object):
                 otherRoom = pr2
             self.worldState[agentID][kInRoom] = otherRoom
         elif action == gaActivateDoor:
-            self.worldState[actionSubjectID][kIsClosed] = False
+            doorID = self.worldState[actionSubjectID][kActivatorTarget]
+            self.worldState[doorID][kIsClosed] = False
         elif action == gaActivateRADoor:
-            self.worldState[actionSubjectID][kIsClosed] = False
+            doorID = self.worldState[actionSubjectID][kActivatorTarget]
+            self.worldState[doorID][kIsClosed] = False
         elif action == gaPickUpObject:
             del self.worldState[actionSubjectID][kInRoom]
             self.worldState[actionSubjectID][kIsBeingCarried] = agentID
@@ -346,7 +366,6 @@ class WorldState(object):
         elif action == gaActivateShuttleGen:
             self.worldState[actionSubjectID][kIsPowered] = True
 
-
     def Dump(self):
         keys = self.worldState.keys()
         keys.sort()
@@ -358,32 +377,98 @@ class WorldState(object):
                 print " - (%s, %s)" % (key, self.worldState[sid][key])
 
 
-class GameWorld(object):
-    def __init__(self):
-        # Dictionary of lists, keyed by subject ID.
-        # Each list contains the "facts" about that
-        # subject.
-        self.worldState = WorldState()
+class PlannerNode(object):
+    def __init__(self, worldState, goalList, actionHistory):
+        self.worldState = copy.deepcopy(worldState)
+        self.actionHistory = copy.deepcopy(actionHistory)
+        self.goalList = copy.deepcopy(goalList)
+        self.score = 0
+
+    def CalculateScore(self):
+        score = 0
+        for agentID, action, actionSubjectID in self.actionHistory:
+            score = score + GetActionCost(action)
+        return score
+
+    def CanApplyAction(self, agentID, action, actionSubjectID):
+        # Already applied it before
+        if (agentID, action, actionSubjectID) in self.actionHistory:
+            return False
+            # Cannot apply it if there are preconditions that are not met.
+        preconds = self.worldState.GetPreconditionsForAction(agentID, action, actionSubjectID)
+        return len(preconds) == 0
+
+    def ApplyAction(self, agentID, action, actionSubjectID):
+        # Execute the action
+        self.worldState.ExecuteAction(agentID, action, actionSubjectID)
+        # Now look through the goal states and compare them to the generated
+        # world states. If any of the states have been satisfied, pull them
+        # from the goal states.
+        goalsLeft = [(sid, key, value) for (sid, key, value) in self.goalList if
+                     not self.worldState.worldState[sid].has_key(key) or self.worldState.worldState[sid][key] != value]
+        self.goalList = goalsLeft
+        # Add this action to the previous actions performed so we don't
+        # try this again.
+        self.actionHistory.append((agentID, action, actionSubjectID))
+        # Update the score
+        self.score = self.CalculateScore()
 
 
-gameWorld = GameWorld()
-#gameWorld.worldState.Dump()
-print
-print
-validActions = gameWorld.worldState.GetValidActions(sidAgent)
-print "Valid Actions for %s:" % sidAgent
-for (agentID, action, actionSubjectID) in validActions:
-    print "  - (%s, %s, %s) "%(agentID, action, actionSubjectID)
-    print "    Preconditions:"
-    preconds = gameWorld.worldState.GetPreconditionsForAction(agentID,action,actionSubjectID)
-    if len(preconds) > 0:
-        for item in preconds:
-            print "       - ",item
-    else:
-            print "       - None or Already Met"
-    print "    Effects:"
-    effects = gameWorld.worldState.GetEffectsForAction(agentID, action, actionSubjectID)
-    for item in effects:
-        sid,key,newValue = item
-        currentValue = gameWorld.worldState.worldState[sid][key]
-        print "       - (%s, %s, %s --> %s)"%(sid,key,currentValue,newValue)
+class Planner(object):
+    def __init__(self, goalList, worldState, agentID):
+        self.goalList = copy.deepcopy(goalList)
+        self.worldState = copy.deepcopy(worldState)
+        self.agentID = agentID
+
+    def PlanActions(self):
+        openList = [PlannerNode(self.worldState, self.goalList, [])]
+        for i in range(20):
+            #        while len(openList) > 0:
+            # Sort the list so the least cost node is at the front.
+            openList.sort(key=lambda x: x.score)
+            # Pull off the least cost node.
+            node = openList[0]
+            print "-------------------"
+            print "Generating Nodes (open list len = %d)" % len(openList)
+            print "  History = ",node.actionHistory
+            print "-------------------"
+            # Take it off the open list
+            openList.pop()
+            # Generate the valid actions for the node
+            validActions = node.worldState.GetValidActions(self.agentID)
+            # If the action has not been applied already and the
+            # preconditions have been met, then apply the action to the
+            # world state and update the goals.
+            for agentID, action, actionSubjectID in validActions:
+                if node.CanApplyAction(agentID, action, actionSubjectID):
+                    # This action is applicable, create a new node, apply
+                    # the action, add it to the open list.
+                    print " - Creating node to apply action: ",(agentID,action,actionSubjectID)
+                    newNode = PlannerNode(node.worldState, node.goalList, node.actionHistory)
+                    print "   - Executing Action:", (agentID, action, actionSubjectID)
+                    newNode.ApplyAction(agentID, action, actionSubjectID)
+                    # If the new node has an empty goal set, it means we are done!
+                    if len(newNode.goalList) == 0:
+                        return newNode.actionHistory
+                    print "   - Node Action History: ",newNode.actionHistory
+                    print "   - Node Score for Actions: ", newNode.score
+                    openList.append(newNode)
+        # If we got here, it means we tried EVERYTHING possible and could not
+        # create a valid plan.
+        return []
+
+
+baseWorldState = WorldState()
+#baseWorldState.Dump()
+goalList = [
+    (sidAgent, kInRoom, cRoom3)
+]
+planner = Planner(goalList, baseWorldState, sidAgent)
+actions = planner.PlanActions()
+print "Actions:"
+if len(actions) == 0:
+    print "  - None"
+else:
+    for action in actions:
+        print "  - ", action
+
