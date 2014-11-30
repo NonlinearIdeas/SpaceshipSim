@@ -145,7 +145,7 @@ def GetActionCost(action):
     elif action == gaActivateRADoor:
         return 1
     elif action == gaPickUpObject:
-        return 10
+        return 1
     elif action == gaActivateShuttle:
         return 1
     elif action == gaActivateShuttleGen:
@@ -377,7 +377,7 @@ class WorldState(object):
                 print " - (%s, %s)" % (key, self.worldState[sid][key])
 
 
-class PlannerNode(object):
+class PlannerForwardNode(object):
     def __init__(self, worldState, goalList, actionHistory):
         self.worldState = copy.deepcopy(worldState)
         self.actionHistory = copy.deepcopy(actionHistory)
@@ -390,11 +390,12 @@ class PlannerNode(object):
             score = score + GetActionCost(action)
         return score
 
-    def CanApplyAction(self, agentID, action, actionSubjectID):
+    def CanApplyAction(self, agentID, action, actionSubjectID, onceOnlyActions = False):
         # Already applied it before
-        if (agentID, action, actionSubjectID) in self.actionHistory:
-            return False
-            # Cannot apply it if there are preconditions that are not met.
+        if onceOnlyActions:
+            if (agentID, action, actionSubjectID) in self.actionHistory:
+                return False
+        # Cannot apply it if there are preconditions that are not met.
         preconds = self.worldState.GetPreconditionsForAction(agentID, action, actionSubjectID)
         return len(preconds) == 0
 
@@ -414,7 +415,7 @@ class PlannerNode(object):
         self.score = self.CalculateScore()
 
 
-class Planner(object):
+class PlannerForward(object):
     def __init__(self, goalList, worldState, agentID):
         self.goalList = copy.deepcopy(goalList)
         self.worldState = copy.deepcopy(worldState)
@@ -422,7 +423,7 @@ class Planner(object):
 
     def PlanActions(self):
         iterCount = 0
-        openList = [PlannerNode(self.worldState, self.goalList, [])]
+        openList = [PlannerForwardNode(self.worldState, self.goalList, [])]
         while len(openList) > 0:
             iterCount = iterCount + 1
             # Sort the list so the least cost node is at the front.
@@ -446,7 +447,7 @@ class Planner(object):
                     # This action is applicable, create a new node, apply
                     # the action, add it to the open list.
                     print " - Creating node to apply action: ",(agentID,action,actionSubjectID)
-                    newNode = PlannerNode(node.worldState, node.goalList, node.actionHistory)
+                    newNode = PlannerForwardNode(node.worldState, node.goalList, node.actionHistory)
                     print "   - Executing Action:", (agentID, action, actionSubjectID)
                     newNode.ApplyAction(agentID, action, actionSubjectID)
                     # If the new node has an empty goal set, it means we are done!
@@ -465,7 +466,7 @@ baseWorldState = WorldState()
 goalList = [
     (sidShuttleLaunch, kIsActivated, True)
 ]
-planner = Planner(goalList, baseWorldState, sidAgent)
+planner = PlannerForward(goalList, baseWorldState, sidAgent)
 actions = planner.PlanActions()
 print
 print "Actions:"
