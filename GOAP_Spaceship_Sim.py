@@ -421,19 +421,21 @@ class Planner(object):
         self.agentID = agentID
 
     def PlanActions(self):
+        iterCount = 0
         openList = [PlannerNode(self.worldState, self.goalList, [])]
-        for i in range(20):
-            #        while len(openList) > 0:
+        while len(openList) > 0:
+            iterCount = iterCount + 1
             # Sort the list so the least cost node is at the front.
             openList.sort(key=lambda x: x.score)
             # Pull off the least cost node.
             node = openList[0]
             print "-------------------"
-            print "Generating Nodes (open list len = %d)" % len(openList)
+            print "Generating Nodes [%d] (open list len = %d)" % (iterCount,len(openList))
             print "  History = ",node.actionHistory
+            print "  Score   = ",node.score
             print "-------------------"
             # Take it off the open list
-            openList.pop()
+            openList.remove(node)
             # Generate the valid actions for the node
             validActions = node.worldState.GetValidActions(self.agentID)
             # If the action has not been applied already and the
@@ -461,10 +463,11 @@ class Planner(object):
 baseWorldState = WorldState()
 #baseWorldState.Dump()
 goalList = [
-    (sidAgent, kInRoom, cRoom3)
+    (sidShuttleLaunch, kIsActivated, True)
 ]
 planner = Planner(goalList, baseWorldState, sidAgent)
 actions = planner.PlanActions()
+print
 print "Actions:"
 if len(actions) == 0:
     print "  - None"
