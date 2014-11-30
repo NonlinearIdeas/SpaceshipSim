@@ -155,7 +155,7 @@ class WorldState(object):
     def SetDefaultStates(self):
         states = [
             # Agent
-            (sidAgent, kInRoom, cRoom3),
+            (sidAgent, kInRoom, cRoom1),
             (sidAgent, kSubjectType, goAgent),
             (sidAgent, kHasRedAccess, False),
             (sidAgent, kAction, [gaGoThroughDoor,
@@ -294,7 +294,7 @@ class WorldState(object):
             result.append((sidShuttleGen, kIsPowered, False))
 
         # Now remove any of these that have already been met in the current world state
-        result = [(sid, key, value) for (sid, key, value) in result if (key, value) not in self.worldState[sid]]
+        result = [(sid, key, value) for (sid, key, value) in result if not self.worldState[sid].has_key(key) or self.worldState[sid][key] != value]
         return result
 
     # Generate a list of precondition tuples that must be satisfied as world
@@ -367,7 +367,7 @@ class GameWorld(object):
 
 
 gameWorld = GameWorld()
-gameWorld.worldState.Dump()
+#gameWorld.worldState.Dump()
 print
 print
 validActions = gameWorld.worldState.GetValidActions(sidAgent)
@@ -376,8 +376,11 @@ for (agentID, action, actionSubjectID) in validActions:
     print "  - (%s, %s, %s) "%(agentID, action, actionSubjectID)
     print "    Preconditions:"
     preconds = gameWorld.worldState.GetPreconditionsForAction(agentID,action,actionSubjectID)
-    for item in preconds:
-        print "       - ",item
+    if len(preconds) > 0:
+        for item in preconds:
+            print "       - ",item
+    else:
+            print "       - None or Already Met"
     print "    Effects:"
     effects = gameWorld.worldState.GetEffectsForAction(agentID, action, actionSubjectID)
     for item in effects:
