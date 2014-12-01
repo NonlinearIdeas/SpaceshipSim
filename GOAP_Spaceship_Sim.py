@@ -171,7 +171,7 @@ class WorldState(object):
     def SetDefaultStates(self):
         states = [
             # Agent
-            (sidAgent, kInRoom, cRoom1),
+            (sidAgent, kInRoom, cRoom2),
             (sidAgent, kSubjectType, goAgent),
             (sidAgent, kHasRedAccess, False),
             (sidAgent, kAction, [gaGoThroughDoor,
@@ -212,7 +212,7 @@ class WorldState(object):
             (sidShuttleGen, kSubjectType, goShuttleGen),
             # Shuttle Launcher
             (sidShuttleLaunch, kIsActivated, False),
-            (sidShuttleLaunch, kInRoom, cRoom3),
+            (sidShuttleLaunch, kInRoom, cRoom2),
             (sidShuttleLaunch, kSubjectType, goShuttleAct),
         ]
         self.worldState = {}
@@ -390,12 +390,12 @@ class PlannerForwardNode(object):
             score = score + GetActionCost(action)
         return score
 
-    def CanApplyAction(self, agentID, action, actionSubjectID, onceOnlyActions = False):
+    def CanApplyAction(self, agentID, action, actionSubjectID, uniqueActions=False):
         # Already applied it before
-        if onceOnlyActions:
+        if uniqueActions:
             if (agentID, action, actionSubjectID) in self.actionHistory:
                 return False
-        # Cannot apply it if there are preconditions that are not met.
+                # Cannot apply it if there are preconditions that are not met.
         preconds = self.worldState.GetPreconditionsForAction(agentID, action, actionSubjectID)
         return len(preconds) == 0
 
@@ -421,19 +421,22 @@ class PlannerForward(object):
         self.worldState = copy.deepcopy(worldState)
         self.agentID = agentID
 
-    def PlanActions(self):
+    def PlanActions(self, uniqueActions, iterCountLimit):
         iterCount = 0
         openList = [PlannerForwardNode(self.worldState, self.goalList, [])]
         while len(openList) > 0:
             iterCount = iterCount + 1
-            # Sort the list so the least cost node is at the front.
+            if iterCountLimit != None and iterCount >= iterCountLimit:
+                return []
+                # Sort the list so the least cost node is at the front.
             openList.sort(key=lambda x: x.score)
             # Pull off the least cost node.
             node = openList[0]
+            print
             print "-------------------"
-            print "Generating Nodes [%d] (open list len = %d)" % (iterCount,len(openList))
-            print "  History = ",node.actionHistory
-            print "  Score   = ",node.score
+            print "Generating Nodes [%d] (open list len = %d)" % (iterCount, len(openList))
+            print "  History = ", node.actionHistory
+            print "  Score   = ", node.score
             print "-------------------"
             # Take it off the open list
             openList.remove(node)
@@ -443,22 +446,30 @@ class PlannerForward(object):
             # preconditions have been met, then apply the action to the
             # world state and update the goals.
             for agentID, action, actionSubjectID in validActions:
-                if node.CanApplyAction(agentID, action, actionSubjectID):
+                if node.CanApplyAction(agentID, action, actionSubjectID, uniqueActions):
                     # This action is applicable, create a new node, apply
                     # the action, add it to the open list.
-                    print " - Creating node to apply action: ",(agentID,action,actionSubjectID)
+                    print " - Creating node to apply action: ", (agentID, action, actionSubjectID)
                     newNode = PlannerForwardNode(node.worldState, node.goalList, node.actionHistory)
                     print "   - Executing Action:", (agentID, action, actionSubjectID)
                     newNode.ApplyAction(agentID, action, actionSubjectID)
                     # If the new node has an empty goal set, it means we are done!
                     if len(newNode.goalList) == 0:
                         return newNode.actionHistory
-                    print "   - Node Action History: ",newNode.actionHistory
+                    print "   - Node Action History: ", newNode.actionHistory
                     print "   - Node Score for Actions: ", newNode.score
                     openList.append(newNode)
-        # If we got here, it means we tried EVERYTHING possible and could not
-        # create a valid plan.
+                    # If we got here, it means we tried EVERYTHING possible and could not
+            # create a valid plan.
         return []
+
+    def PlanActionsMixed(self, iterCountLimit=100):
+        actions = self.PlanActions(uniqueActions=True, iterCountLimit=None)
+        # If we got an answer from unique actions, then we are done.
+        if len(actions) > 0:
+            return actions
+            # Return the result from the longer search.
+        return self.PlanActions(uniqueActions=False, iterCountLimit=iterCountLimit)
 
 
 baseWorldState = WorldState()
@@ -467,12 +478,12 @@ goalList = [
     (sidShuttleLaunch, kIsActivated, True)
 ]
 planner = PlannerForward(goalList, baseWorldState, sidAgent)
-actions = planner.PlanActions()
+actions = planner.PlanActionsMixed()
 print
 print "Actions:"
 if len(actions) == 0:
     print "  - None"
 else:
-    for action in actions:
-        print "  - ", action
+    for act in actions:
+        print "  - ", act
 
