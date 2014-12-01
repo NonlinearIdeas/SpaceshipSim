@@ -15,8 +15,8 @@ import copy
 #
 #       ROOM1             ROOM2  ROOM3
 #
-#    | - VERTICAL WALL (edge)
-#    - - HORIZONTAL WALL (edge)
+#    | - VERTICAL WALL (just for show)
+#    - - HORIZONTAL WALL (just for show)
 #    . - OPEN FLOOR (node)
 #    A - AGENT (game entity)
 #    R - RED ACCESS CARD (game object)
@@ -29,8 +29,10 @@ import copy
 #    S - SHUTTLE (node)
 #
 # The agent (A) is on the left.  Their goal is to
-# take off in the shuttle.  The ideal sequence
-# of actions is:
+# take off in the shuttle.  The shuttle needs power
+# to launch, provided by the generator Q.
+#
+# The ideal sequence of actions is:
 #
 # 1. Goto Red Access Card (R)
 # 2. Pick up Red Access Card
@@ -190,7 +192,7 @@ class WorldState(object):
     def SetDefaultStates(self):
         states = [
             # Agent
-            (sidAgent, kInRoom, cRoom3),
+            (sidAgent, kInRoom, cRoom2),
             (sidAgent, kSubjectType, goAgent),
             (sidAgent, kAction, [gaGoThroughDoor,
                                  gaPickUpObject,
@@ -248,7 +250,7 @@ class WorldState(object):
         result = []
         for sid in self.worldState.keys():
             sidRooms = []
-            if (sid == agentID):
+            if sid == agentID:
                 continue
             if self.worldState[sid].has_key(kInRoom):
                 sidRooms = [self.worldState[sid][kInRoom]]
@@ -258,7 +260,7 @@ class WorldState(object):
             # is in any of them.
             if agentRoom in sidRooms:
                 result.append(sid)
-        print "Game Room Objects: ROOM[%s] %s" % (agentRoom, result)
+        #print "Game Room Objects: ROOM[%s] %s" % (agentRoom, result)
         return result
 
     # Generate a list of actions that the agent can execute
@@ -464,7 +466,7 @@ class PlannerForward(object):
             if iterCountLimit != None and iterCount >= iterCountLimit:
                 return []
                 # Sort the list so the least cost node is at the front.
-            openList.sort(key=lambda x: x.score)
+            openList.sort(key=lambda x: x.score,reverse=False)
             # Pull off the least cost node.
             node = openList[0]
             print
@@ -490,22 +492,48 @@ class PlannerForward(object):
                     newNode.ApplyAction(agentID, action, actionSubjectID)
                     # If the new node has an empty goal set, it means we are done!
                     if len(newNode.goalList) == 0:
-                        return newNode.actionHistory
+                        return iterCount, newNode.actionHistory
                     print "   - Node Action History: ", newNode.actionHistory
                     print "   - Node Score for Actions: ", newNode.score
                     openList.append(newNode)
                     # If we got here, it means we tried EVERYTHING possible and could not
             # create a valid plan.
-        return []
+        return (iterCount,[])
+
+    def PrintSolutionBanner(self,iterCount,actions):
+        if len(actions) > 0:
+            print "   ----------------------------------"
+            print "   SOLUTION FOUND"
+            if len(actions) > 0:
+                print "   Iterations / Actions = %f" % (iterCount * 1.0 / len(actions))
+            print "   ----------------------------------"
+        else:
+            print "   ----------------------------------"
+            print "   NO SOLUTION FOUND"
+            print "   Iterations = %d" % (iterCount)
+            print "   ----------------------------------"
+
 
     def PlanActionsMixed(self, iterCountLimit=100):
-        actions = self.PlanActions(uniqueActions=True, iterCountLimit=None)
+        iterCount1, actions = self.PlanActions(uniqueActions=True, iterCountLimit=None)
         # If we got an answer from unique actions, then we are done.
         if len(actions) > 0:
+            self.PrintSolutionBanner(iterCount1,actions)
             return actions
-            # Return the result from the longer search.
-        return self.PlanActions(uniqueActions=False, iterCountLimit=iterCountLimit)
+        # Return the result from the longer search.
+        iterCount2, actions = self.PlanActions(uniqueActions=False, iterCountLimit=iterCountLimit)
+        self.PrintSolutionBanner(iterCount1+iterCount2, actions)
+        return actions
 
+
+def PrintActions(actions):
+    print
+    print "Actions:"
+    if len(actions) == 0:
+        print "  - None"
+    else:
+        for act in actions:
+            print "  - ", act
 
 baseWorldState = WorldState()
 #baseWorldState.Dump()
@@ -514,11 +542,4 @@ goalList = [
 ]
 planner = PlannerForward(goalList, baseWorldState, sidAgent)
 actions = planner.PlanActionsMixed()
-print
-print "Actions:"
-if len(actions) == 0:
-    print "  - None"
-else:
-    for act in actions:
-        print "  - ", act
-
+PrintActions(actions)
