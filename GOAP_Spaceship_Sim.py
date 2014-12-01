@@ -136,6 +136,26 @@ def IsActionAllowed(action, subjectType):
         return False
     return False
 
+def GetRoomDistanceCost(srcRoom,desRoom):
+    costs = {
+        cRoom1:{
+            cRoom1:0,
+            cRoom2:1,
+            cRoom3:2
+        },
+        cRoom2:{
+            cRoom1:1,
+            cRoom2:0,
+            cRoom3:1
+        },
+        cRoom3:{
+            cRoom1:2,
+            cRoom2:1,
+            cRoom3:0
+        }
+    }
+    return costs[srcRoom][desRoom]
+
 
 def GetActionCost(action):
     if action == gaGoThroughDoor:
@@ -212,7 +232,7 @@ class WorldState(object):
             (sidShuttleGen, kSubjectType, goShuttleGen),
             # Shuttle Launcher
             (sidShuttleLaunch, kIsActivated, False),
-            (sidShuttleLaunch, kInRoom, cRoom2),
+            (sidShuttleLaunch, kInRoom, cRoom3),
             (sidShuttleLaunch, kSubjectType, goShuttleAct),
         ]
         self.worldState = {}
@@ -384,10 +404,20 @@ class PlannerForwardNode(object):
         self.goalList = copy.deepcopy(goalList)
         self.score = 0
 
-    def CalculateScore(self):
+    def CalculateScore(self,agentID):
         score = 0
-        for agentID, action, actionSubjectID in self.actionHistory:
+        for agentIDOther, action, actionSubjectID in self.actionHistory:
             score = score + GetActionCost(action)
+        # Add in something for how far away the agent is from the
+        # final room.  This may help or may hinder depending on how
+        # much back-and-forth is required.
+        srcRoom = self.worldState.worldState[agentID][kInRoom]
+        if(len(self.goalList) > 0):
+            desRoom = self.worldState.worldState[self.goalList[0][0]][kInRoom]
+        else:
+            desRoom = srcRoom
+        roomCost = GetRoomDistanceCost(srcRoom,desRoom)
+        score = score + roomCost*5
         return score
 
     def CanApplyAction(self, agentID, action, actionSubjectID, uniqueActions=False):
@@ -412,7 +442,7 @@ class PlannerForwardNode(object):
         # try this again.
         self.actionHistory.append((agentID, action, actionSubjectID))
         # Update the score
-        self.score = self.CalculateScore()
+        self.score = self.CalculateScore(agentID)
 
 
 class PlannerForward(object):
