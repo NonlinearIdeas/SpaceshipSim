@@ -62,7 +62,6 @@ kInRoom = "In Room"                     # Integer room number
 kIsPowered = "Is Powered"               # Boolean
 kIsClosed = "Is Closed"                 # Boolean
 kIsActivated = "Is Activated"           # Boolean
-kHasRedAccess = "Has Red Access"        # Boolean
 kRoomPortal = "Room Portal"             # Tuple of two rooms
 kActivatorTarget = "Activator Target"   # Subject ID of a target
 kSubjectType = "Subject Type"           # What kind of "thing" is this?
@@ -191,9 +190,8 @@ class WorldState(object):
     def SetDefaultStates(self):
         states = [
             # Agent
-            (sidAgent, kInRoom, cRoom2),
+            (sidAgent, kInRoom, cRoom3),
             (sidAgent, kSubjectType, goAgent),
-            (sidAgent, kHasRedAccess, False),
             (sidAgent, kAction, [gaGoThroughDoor,
                                  gaPickUpObject,
                                  gaActivateDoor,
@@ -249,6 +247,7 @@ class WorldState(object):
         # Iterate over ALL states (lots?)
         result = []
         for sid in self.worldState.keys():
+            sidRooms = []
             if (sid == agentID):
                 continue
             if self.worldState[sid].has_key(kInRoom):
@@ -259,7 +258,7 @@ class WorldState(object):
             # is in any of them.
             if agentRoom in sidRooms:
                 result.append(sid)
-                #        print "Game Room Objects: ROOM[%s] %s" % (agentRoom, result)
+        print "Game Room Objects: ROOM[%s] %s" % (agentRoom, result)
         return result
 
     # Generate a list of actions that the agent can execute
@@ -293,8 +292,7 @@ class WorldState(object):
         elif action == gaActivateRADoor:
             result.append((self.worldState[actionSubjectID][kActivatorTarget], kIsClosed, False))
         elif action == gaPickUpObject:
-            if self.worldState[actionSubjectID][kSubjectType] == goRedDoorKey:
-                result.append((agentID, kHasRedAccess, True))
+            pass
         elif action == gaActivateShuttle:
             result.append((actionSubjectID, kIsActivated, True))
         elif action == gaActivateShuttleGen:
@@ -318,11 +316,10 @@ class WorldState(object):
             result.append((self.worldState[actionSubjectID][kActivatorTarget], kIsClosed, True))
         elif action == gaActivateRADoor:
             result.append((self.worldState[actionSubjectID][kActivatorTarget], kIsClosed, True))
-            result.append((agentID, kHasRedAccess, True))
             # NOTE:  There is also a procedural check to see if the agent has the Red Door Key.
         elif action == gaPickUpObject:
-            if self.worldState[actionSubjectID][kSubjectType] == goRedDoorKey:
-                result.append((agentID, kHasRedAccess, False))
+            # There are not any constraints on what can be picked up.  As long as it can
+            # be picked up.
             pass
         elif action == gaActivateShuttle:
             result.append((sidShuttleLaunch, kIsActivated, False))
@@ -335,9 +332,9 @@ class WorldState(object):
                   not self.worldState[sid].has_key(key) or self.worldState[sid][key] != value]
         return result
 
-    # Generate a list of precondition tuples that must be satisfied as world
-    # states.  If the world state is already satisfied, then it is NOT added
-    # to the list.  Tuples are of the form: (subjectID, key, value)
+    # Procedural preconditions are used to prune paths from the tree.  This allows
+    # complex calculations to be done to evaluate whether an action should be run or
+    # not.
     def CheckPreconditionsForAction(self, agentID, action, actionSubjectID):
         result = True
         if action == gaGoThroughDoor:
@@ -351,7 +348,7 @@ class WorldState(object):
             for sid in inventory:
                 if self.worldState[sid][kSubjectType] == goRedDoorKey:
                     return True
-                return False
+            return False
         elif action == gaPickUpObject:
             pass
         elif action == gaActivateShuttle:
@@ -379,8 +376,6 @@ class WorldState(object):
             self.worldState[actionSubjectID][kIsBeingCarried] = agentID
             if not actionSubjectID in self.worldState[agentID][kIsCarrying]:
                 self.worldState[agentID][kIsCarrying].append(actionSubjectID)
-            if self.worldState[actionSubjectID][kSubjectType] == goRedDoorKey:
-                self.worldState[agentID][kHasRedAccess] = True
         elif action == gaActivateShuttle:
             self.worldState[actionSubjectID][kIsActivated] = True
         elif action == gaActivateShuttleGen:
@@ -422,12 +417,22 @@ class PlannerForwardNode(object):
 
     def CanApplyAction(self, agentID, action, actionSubjectID, uniqueActions=False):
         # Already applied it before
+        actionTup = (agentID, action, actionSubjectID)
         if uniqueActions:
-            if (agentID, action, actionSubjectID) in self.actionHistory:
+            if actionTup in self.actionHistory:
                 return False
-                # Cannot apply it if there are preconditions that are not met.
+        else:
+            # Still, should not even try the same action again immediately...
+            # that would be just silly.
+            if len(self.actionHistory) > 0 and self.actionHistory[-1] == actionTup:
+                return False
+        # Cannot apply it if there are preconditions that are not met.
         preconds = self.worldState.GetPreconditionsForAction(agentID, action, actionSubjectID)
-        return len(preconds) == 0
+        if len(preconds) > 0:
+            return False
+        if not self.worldState.CheckPreconditionsForAction(agentID,action,actionSubjectID):
+            return False
+        return True
 
     def ApplyAction(self, agentID, action, actionSubjectID):
         # Execute the action
