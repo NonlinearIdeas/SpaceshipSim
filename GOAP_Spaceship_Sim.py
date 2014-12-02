@@ -176,17 +176,8 @@ def GetActionCost(action):
 
 class WorldState(object):
     def __init__(self):
+        self.worldState = {}
         self.SetDefaultStates()
-
-    def RemoveStateListKeys(self, stateList, stateKey):
-        for i in xrange(len(stateList) - 1, -1, -1):
-            key, value = stateList[i]
-            if key == stateKey:
-                del stateList[i]
-
-    def StateListValues(self, stateList, stateKey):
-        result = [v for k, v in stateList if k == stateKey]
-        return result
 
     # Setup the default game world.
     def SetDefaultStates(self):
@@ -280,29 +271,6 @@ class WorldState(object):
                     result.append((agentID, action, sid))
         return result
 
-    def GetEffectsForAction(self, agentID, action, actionSubjectID):
-        result = []
-        if action == gaGoThroughDoor:
-            agentRoom = self.worldState[agentID][kInRoom]
-            pr1, pr2 = self.worldState[actionSubjectID][kRoomPortal]
-            otherRoom = pr1
-            if pr1 == agentRoom:
-                otherRoom = pr2
-            result.append((agentID, kInRoom, otherRoom))
-        elif action == gaActivateDoor:
-            result.append((self.worldState[actionSubjectID][kActivatorTarget], kIsClosed, False))
-        elif action == gaActivateRADoor:
-            result.append((self.worldState[actionSubjectID][kActivatorTarget], kIsClosed, False))
-        elif action == gaPickUpObject:
-            pass
-        elif action == gaActivateShuttle:
-            result.append((actionSubjectID, kIsActivated, True))
-        elif action == gaActivateShuttleGen:
-            result.append((actionSubjectID, kIsPowered, True))
-
-        # Now remove any of these that have already been met in the current world state
-        result = [(sid, key, value) for (sid, key, value) in result if (key, value) not in self.worldState[sid]]
-        return result
 
     # Generate a list of precondition tuples that must be satisfied as world
     # states.  If the world state is already satisfied, then it is NOT added
@@ -394,7 +362,7 @@ class WorldState(object):
                 print " - (%s, %s)" % (key, self.worldState[sid][key])
 
 
-class PlannerForwardNode(object):
+class PlannerNode(object):
     def __init__(self, worldState, goalList, actionHistory):
         self.worldState = copy.deepcopy(worldState)
         self.actionHistory = copy.deepcopy(actionHistory)
@@ -404,17 +372,17 @@ class PlannerForwardNode(object):
     def CalculateScore(self,agentID):
         score = 0
         for agentIDOther, action, actionSubjectID in self.actionHistory:
-            score = score + GetActionCost(action)
+            score += GetActionCost(action)
         # Add in something for how far away the agent is from the
         # final room.  This may help or may hinder depending on how
         # much back-and-forth is required.
         srcRoom = self.worldState.worldState[agentID][kInRoom]
-        if(len(self.goalList) > 0):
+        if len(self.goalList) > 0:
             desRoom = self.worldState.worldState[self.goalList[0][0]][kInRoom]
         else:
             desRoom = srcRoom
         roomCost = GetRoomDistanceCost(srcRoom,desRoom)
-        score = score + roomCost*5
+        score += roomCost*5
         return score
 
     def CanApplyAction(self, agentID, action, actionSubjectID, uniqueActions=False):
@@ -452,7 +420,7 @@ class PlannerForwardNode(object):
         self.score = self.CalculateScore(agentID)
 
 
-class PlannerForward(object):
+class Planner(object):
     def __init__(self, goalList, worldState, agentID):
         self.goalList = copy.deepcopy(goalList)
         self.worldState = copy.deepcopy(worldState)
@@ -460,7 +428,7 @@ class PlannerForward(object):
 
     def PlanActions(self, uniqueActions, iterCountLimit):
         iterCount = 0
-        openList = [PlannerForwardNode(self.worldState, self.goalList, [])]
+        openList = [PlannerNode(self.worldState, self.goalList, [])]
         while len(openList) > 0:
             iterCount = iterCount + 1
             if iterCountLimit != None and iterCount >= iterCountLimit:
@@ -487,7 +455,7 @@ class PlannerForward(object):
                     # This action is applicable, create a new node, apply
                     # the action, add it to the open list.
                     print " - Creating node to apply action: ", (agentID, action, actionSubjectID)
-                    newNode = PlannerForwardNode(node.worldState, node.goalList, node.actionHistory)
+                    newNode = PlannerNode(node.worldState, node.goalList, node.actionHistory)
                     print "   - Executing Action:", (agentID, action, actionSubjectID)
                     newNode.ApplyAction(agentID, action, actionSubjectID)
                     # If the new node has an empty goal set, it means we are done!
@@ -540,6 +508,6 @@ baseWorldState = WorldState()
 goalList = [
     (sidShuttleLaunch, kIsActivated, True)
 ]
-planner = PlannerForward(goalList, baseWorldState, sidAgent)
+planner = Planner(goalList, baseWorldState, sidAgent)
 actions = planner.PlanActionsMixed()
 PrintActions(actions)
