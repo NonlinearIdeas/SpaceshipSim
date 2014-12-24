@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		1AEAFECF1A484B2000E62417 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1AEAFECE1A484B2000E62417 /* main.cpp */; };
 		1AEAFEDA1A484EA300E62417 /* input.csv in CopyFiles */ = {isa = PBXBuildFile; fileRef = 1AEAFED51A484B6400E62417 /* input.csv */; };
+		1AEAFEDD1A4A38E900E62417 /* CSVParser.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1AEAFEDB1A4A38E900E62417 /* CSVParser.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -29,6 +30,8 @@
 		1AEAFECE1A484B2000E62417 /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
 		1AEAFED51A484B6400E62417 /* input.csv */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = input.csv; sourceTree = "<group>"; };
 		1AEAFED61A484B6400E62417 /* TemplateIcon2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = TemplateIcon2x.png; sourceTree = "<group>"; };
+		1AEAFEDB1A4A38E900E62417 /* CSVParser.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = CSVParser.cpp; sourceTree = "<group>"; };
+		1AEAFEDC1A4A38E900E62417 /* CSVParser.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CSVParser.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -62,6 +65,8 @@
 			isa = PBXGroup;
 			children = (
 				1AEAFECE1A484B2000E62417 /* main.cpp */,
+				1AEAFEDB1A4A38E900E62417 /* CSVParser.cpp */,
+				1AEAFEDC1A4A38E900E62417 /* CSVParser.h */,
 				1AEAFED51A484B6400E62417 /* input.csv */,
 				1AEAFED61A484B6400E62417 /* TemplateIcon2x.png */,
 			);
@@ -125,6 +130,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1AEAFECF1A484B2000E62417 /* main.cpp in Sources */,
+				1AEAFEDD1A4A38E900E62417 /* CSVParser.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -238,6 +244,7 @@
 				1AEAFED41A484B2000E62417 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
