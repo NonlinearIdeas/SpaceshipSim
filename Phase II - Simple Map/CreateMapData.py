@@ -47,6 +47,12 @@ class MapData(object):
         self.tileHeight = 0
         self.mapWidth = 0
         self.mapHeight = 0
+
+        # ---------------------------------------------------
+        # The following variables are used to
+        # hold the raw data obtained from the XML file.
+        # ---------------------------------------------------
+
         # The XML Tree used to hold the original file
         # data.  Set to None by default.
         self.tree = None
@@ -55,22 +61,40 @@ class MapData(object):
         self.nodeDict = {}
         # A dictionary with each piece of room information
         # keyed by its room name
-        self.roomDict = {}
+        self.roomObjectDict = {}
         # A dictionary of the tileset used for the map,
         # keyed by the tileID
         self.tileDict = {}
+        # A dictionary containing a tuple of the index, cellX, and
+        # cellY for each cell that in the room.
+        self.roomCell = {}
 
-    def CalcNodeData(self,index,gid,cellsWide,cellsHigh,cellWidth,cellHeight):
+
+        # ---------------------------------------------------
+        # The following variables are used to
+        # hold the data computed based on the raw data.
+        # ---------------------------------------------------
+
+        # For each valid cell index, there are several pieces of
+        # information.  This dictionary contains ALL the information
+        # for every cell.
+        self.cellInfoDict = {}
+        # For each room, there are several pieces of information
+        # as well.  This dictionary contains all the information
+        # for every room.
+        self.roomInfoDict = {}
+
+    def CalcNodeData(self, index, gid):
         tileID = gid & 0x00FFFFFF
         flipX = (gid & MapData.FLIPPED_HORIZONTALLY_FLAG) > 0
         flipY = (gid & MapData.FLIPPED_VERTICALLY_FLAG) > 0
         flipD = (gid & MapData.FLIPPED_DIAGONALLY_FLAG) > 0
-        cellX = index % cellsWide
-        cellY = index / cellsWide
-        x1 = cellX * cellWidth
-        y1 = cellY * cellHeight
-        x2 = x1 + cellWidth
-        y2 = y1 - cellHeight
+        cellX = index % self.mapWidth
+        cellY = index / self.mapWidth
+        x1 = cellX * self.tileWidth
+        y1 = cellY * self.tileHeight
+        x2 = x1 + self.tileWidth
+        y2 = y1 + self.tileHeight
 
         return index,tileID, cellX, cellY, (x1, y1), (x2, y2), flipX, flipY, flipD
 
@@ -80,13 +104,13 @@ class MapData(object):
         x2, y2 = botRight
         sX1, sY1 = sTopLeft
         sX2, sY2 = sBotRight
-        if x1 < sX1:
+        if x1 > sX2:
             return False
-        if y1 > sY1:
+        if x2 < sX1:
             return False
-        if x2 > sX2:
+        if y1 > sY2:
             return False
-        if y2 < sY2:
+        if y2 < sY1:
             return False
         return True
 
@@ -97,7 +121,7 @@ class MapData(object):
             return False
         # A dictionary of the tile IDs and the type of
         # OBJECT_TYPE they map to.
-        roomDict = {}
+        roomObjectDict = {}
         # Bring in the tileset data.  We only
         # support ONE tileset currently.
         root = self.tree.getroot()
@@ -129,25 +153,73 @@ class MapData(object):
                     continue
                 if property[0].attrib['name'] == "ROOM":
                     roomName = property[0].attrib['value']
-                    roomDict[roomName] = { 'BOUNDS':((x,y),(x+width,y+height)) }
-        self.roomDict = roomDict
+                    roomObjectDict[roomName] = { 'BOUNDS':((x,y),(x+width,y+height)) }
+        self.roomObjectDict = roomObjectDict
         return True
 
-    def DumpRoomInfo(self):
-        roomDict = self.roomDict
-        keys = roomDict.keys()
+    def DumpRoomObjectInfo(self):
+        roomObjectDict = self.roomObjectDict
+        keys = roomObjectDict.keys()
         keys.sort()
         print '----------------- ROOM INFO ------------------ '
         for key in keys:
-            print "Room [%s] = %s." % (key, roomDict[key])
+            print "Room [%s] = %s." % (key, roomObjectDict[key])
         print '---------------------------------------------- '
         print
 
     def ExtractLayerInformation(self):
         # There are certain layers that are
-        # specifically searched for.  Any layers that are found
-        # that are NOT on this list will cause a problem.
-        layers = {}
+        # specifically searched for.  If a necessary
+        # layer is not found, this will fail.  Other
+        # layers are ignored.
+        layerDict = {}
+        root = self.tree.getroot()
+        layers = root.findall("layer")
+        for layer in layers:
+            name = layer.attrib['name']
+            if name not in MapData.EXPECTED_LAYERS:
+                print "Layer [%s] not used in processing."
+                continue
+            # Found one we care about.
+            width = int(layer.attrib['width'])
+            height = int(layer.attrib['height'])
+            if width != self.mapWidth or height != self.mapHeight:
+                print "Layer %s has incorrect dimensions; expected [%d x %d], found [%d x %d]."%(
+                    name,self.mapWidth,self.mapHeight,width,height
+                )
+                print "Unable to continue..."
+                return False
+            tiles = layer[0].findall("tile")
+            if len(tiles) != self.mapWidth*self.mapHeight:
+                print "Layer %s tile count [%d] does not match expected [%d]."%(
+                    name,len(tiles),self.mapWidth*self.mapHeight
+                )
+                print "Unable to continue..."
+                return False
+            tileData = {}
+            for idx in xrange(len(tiles)):
+                gid = int(tiles[idx].attrib["gid"])
+                if gid > 0:
+                    tileData[idx] = self.CalcNodeData(idx, gid)
+            layerDict[name] = tileData
+        for layerName in MapData.EXPECTED_LAYERS:
+            if layerName not in layerDict:
+                print "Unable to find layer %s in map data."%layerName
+                print "Unable to continue..."
+                return False
+        self.layerDict = layerDict
+        return True
+
+
+    def DumpLayerInfo(self):
+        layerDict = self.layerDict
+        keys = layerDict.keys()
+        keys.sort()
+        print '----------------- LAYER INFO ------------------ '
+        for key in keys:
+            print "Layer [%s] = %s." % (key, layerDict[key])
+        print '----------------------------------------------- '
+        print
 
 
     def ExtractTilesetInformation(self):
@@ -222,6 +294,82 @@ class MapData(object):
         print '---------------------------------------------- '
         print
 
+    def CalculateCellsInRooms(self):
+        # For all the cells that are in the "Floor" layer,
+        # compare it against the objects found and figure
+        # out which cells are in each room.  Any cells that
+        # are on the floor but NOT in a room are part of the
+        # "Hall" room.
+        #
+        # This is a BRUTE FORCE algorithm.
+        roomCells = { "HALLWAY":[]}
+        for room in self.roomObjectDict:
+            roomCells[room] = []
+        for tileIndex in self.layerDict['Floor']:
+            index, tileID, cellX, cellY, topLeft, botRight, flipX, flipY, flipD = self.layerDict['Floor'][tileIndex]
+            found = False
+            for room in self.roomObjectDict:
+                rTopLeft, rBotRight = self.roomObjectDict[room]['BOUNDS']
+                if self.Overlaps(topLeft,botRight,rTopLeft,rBotRight):
+                    roomCells[room].append((index,cellX,cellY))
+                    found = True
+                    break
+            if not found:
+                roomCells["HALLWAY"].append((index, cellX, cellY))
+        # If there were any rooms that were NOT populated,
+        # there is a problem.
+        for room in roomCells:
+            if len(roomCells[room]) == 0:
+                print "No tiles found for room %s."%room
+                print "Unable to continue..."
+                return False
+        self.roomCells = roomCells
+        # Now update the tileInfoDict to contain the room for each
+        # tile that was found.  Anything NOT in a room should throw
+        # an error later on.
+        for room in roomCells.keys():
+            self.roomInfoDict[room] = { "Cells":[] }
+            for index,cellX,cellY in roomCells[room]:
+                self.cellInfoDict[index] = { "Cell":(cellX,cellY), "Room":room }
+                self.roomInfoDict[room]["Cells"].append(index)
+        return True
+
+    def DumpRoomCellsInfo(self):
+        roomCells = self.roomCells
+        keys = roomCells.keys()
+        keys.sort()
+        print '----------------- ROOM CELL INFO ------------------ '
+        for key in keys:
+            for index,cellX,cellY in roomCells[key]:
+                print "Room: %s Cell (%d,%d) Index %d."%(key,cellX,cellY,index)
+            print
+        print '--------------------------------------------------- '
+        print
+
+    def DumpCellInfo(self):
+        cellInfoDict = self.cellInfoDict
+        keys = cellInfoDict.keys()
+        keys.sort()
+        print '----------------- CELL INFO ------------------ '
+        for key in keys:
+            print "Cell %d - %s"%(key,cellInfoDict[key])
+        print '--------------------------------------------------- '
+        print
+
+    def DumpRoomInfo(self):
+        roomInfoDict = self.roomInfoDict
+        keys = roomInfoDict.keys()
+        keys.sort()
+        print '----------------- ROOM INFO ------------------ '
+        for key in keys:
+            print "Room %s - %s" % (key, roomInfoDict[key])
+        print '--------------------------------------------------- '
+        print
+
+    def CalculateCellObjects(self):
+        # Determine ALL the objects that are stored in this cell.
+        pass
+
     # This function drives all the data extraction.
     def ParseTMXData(self, fileName):
         # Is the filename valid?
@@ -247,11 +395,23 @@ class MapData(object):
 
         if not self.ExtractRoomObjectsInformation():
             return False
-        self.DumpRoomInfo()
+        self.DumpRoomObjectInfo()
+
+        if not self.ExtractLayerInformation():
+            return False
+        self.DumpLayerInfo()
 
         # Now that we have all the information, we
         # can process it into the various sets we
         # really want.
+
+        # Calculate which cells are in each room.
+        if not self.CalculateCellsInRooms():
+            return False
+        self.DumpRoomCellsInfo()
+
+        self.DumpCellInfo()
+        self.DumpRoomInfo()
 
         return True
 
