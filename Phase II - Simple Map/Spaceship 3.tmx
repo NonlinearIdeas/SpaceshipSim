@@ -2,6 +2,11 @@
 <map version="1.0" orientation="orthogonal" renderorder="left-up" width="24" height="24" tilewidth="64" tileheight="64">
  <tileset firstgid="1" name="Spaceship 3" tilewidth="64" tileheight="64">
   <image source="Spaceship 3.png" width="512" height="1792"/>
+  <tile id="0">
+   <properties>
+    <property name="OBJECT_TYPE" value="FLOOR"/>
+   </properties>
+  </tile>
   <tile id="135">
    <properties>
     <property name="OBJECT_TYPE" value="DOOR"/>
@@ -24,12 +29,12 @@
   </tile>
   <tile id="139">
    <properties>
-    <property name="OBJECT_TYPE" value="DOOR"/>
+    <property name="OBJECT_TYPE" value="SECRET_DOOR"/>
    </properties>
   </tile>
   <tile id="140">
    <properties>
-    <property name="OBJECT_TYPE" value="DOOR"/>
+    <property name="OBJECT_TYPE" value="SECRET_DOOR"/>
    </properties>
   </tile>
   <tile id="141">
@@ -59,32 +64,42 @@
   </tile>
   <tile id="146">
    <properties>
-    <property name="OBJECT_TYPE" value="DOOR"/>
+    <property name="OBJECT_TYPE" value="SHUTTLE_DOOR"/>
    </properties>
   </tile>
   <tile id="147">
    <properties>
-    <property name="OBJECT_TYPE" value="DOOR"/>
+    <property name="OBJECT_TYPE" value="SHUTTLE_DOOR"/>
    </properties>
   </tile>
   <tile id="148">
    <properties>
-    <property name="OBJECT_TYPE" value="DOOR"/>
+    <property name="OBJECT_TYPE" value="SHUTTLE_DOOR"/>
    </properties>
   </tile>
   <tile id="149">
    <properties>
-    <property name="OBJECT_TYPE" value="DOOR"/>
+    <property name="OBJECT_TYPE" value="SHUTTLE_DOOR"/>
    </properties>
   </tile>
   <tile id="150">
    <properties>
-    <property name="OBJECT_TYPE" value="DOOR"/>
+    <property name="OBJECT_TYPE" value="SHUTTLE_DOOR"/>
    </properties>
   </tile>
   <tile id="151">
    <properties>
-    <property name="OBJECT_TYPE" value="DOOR"/>
+    <property name="OBJECT_TYPE" value="SHUTTLE_DOOR"/>
+   </properties>
+  </tile>
+  <tile id="152">
+   <properties>
+    <property name="OBJECT_TYPE" value="SHUTTLE_DOOR"/>
+   </properties>
+  </tile>
+  <tile id="153">
+   <properties>
+    <property name="OBJECT_TYPE" value="SHUTTLE_DOOR"/>
    </properties>
   </tile>
   <tile id="154">
@@ -1784,6 +1799,7 @@
    <tile gid="0"/>
    <tile gid="0"/>
    <tile gid="0"/>
+   <tile gid="1"/>
    <tile gid="0"/>
    <tile gid="0"/>
    <tile gid="0"/>
@@ -1807,13 +1823,12 @@
    <tile gid="0"/>
    <tile gid="0"/>
    <tile gid="0"/>
-   <tile gid="0"/>
-   <tile gid="0"/>
-   <tile gid="169"/>
+   <tile gid="1"/>
+   <tile gid="1"/>
    <tile gid="170"/>
    <tile gid="171"/>
    <tile gid="0"/>
-   <tile gid="0"/>
+   <tile gid="1"/>
    <tile gid="0"/>
    <tile gid="0"/>
    <tile gid="0"/>
@@ -1834,8 +1849,8 @@
    <tile gid="0"/>
    <tile gid="0"/>
    <tile gid="0"/>
-   <tile gid="0"/>
-   <tile gid="0"/>
+   <tile gid="1"/>
+   <tile gid="1"/>
    <tile gid="0"/>
    <tile gid="172"/>
    <tile gid="173"/>
@@ -1859,8 +1874,8 @@
    <tile gid="0"/>
    <tile gid="0"/>
    <tile gid="0"/>
-   <tile gid="0"/>
-   <tile gid="0"/>
+   <tile gid="1"/>
+   <tile gid="1"/>
    <tile gid="0"/>
    <tile gid="0"/>
    <tile gid="0"/>
@@ -1884,9 +1899,9 @@
    <tile gid="180"/>
    <tile gid="179"/>
    <tile gid="0"/>
-   <tile gid="0"/>
-   <tile gid="0"/>
-   <tile gid="0"/>
+   <tile gid="1"/>
+   <tile gid="1"/>
+   <tile gid="1"/>
    <tile gid="0"/>
    <tile gid="0"/>
    <tile gid="0"/>
@@ -1908,10 +1923,10 @@
    <tile gid="181"/>
    <tile gid="178"/>
    <tile gid="0"/>
-   <tile gid="0"/>
+   <tile gid="1"/>
    <tile gid="175"/>
-   <tile gid="176"/>
-   <tile gid="177"/>
+   <tile gid="1"/>
+   <tile gid="1"/>
    <tile gid="0"/>
    <tile gid="0"/>
    <tile gid="0"/>
@@ -4491,7 +4506,7 @@
   </object>
   <object x="928" y="224" width="112" height="208">
    <properties>
-    <property name="ROOM" value="MED_LAB"/>
+    <property name="ROOM" value="MEDICAL"/>
    </properties>
   </object>
   <object x="480" y="224" width="384" height="208">
@@ -4499,7 +4514,11 @@
     <property name="ROOM" value="CRYO_BAY"/>
    </properties>
   </object>
-  <object x="544" y="608" width="384" height="272"/>
+  <object x="544" y="608" width="384" height="272">
+   <properties>
+    <property name="ROOM" value="COMMONS"/>
+   </properties>
+  </object>
   <object x="80" y="352" width="208" height="192">
    <properties>
     <property name="ROOM" value="CARGO_BAY"/>
