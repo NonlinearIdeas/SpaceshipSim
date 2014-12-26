@@ -83,6 +83,12 @@ class MapData(object):
         # as well.  This dictionary contains all the information
         # for every room.
         self.roomInfoDict = {}
+        # For each object that can be used, it has several properties,
+        # some of which may depend on the object type.
+        # This dictionary keeps track of all the information for each object and
+        # assigns an ID to each object (incrementing integer).  This is used as a
+        # reference for later.
+        self.objectInfoDict = {}
 
     def CalcNodeData(self, index, gid):
         tileID = gid & 0x00FFFFFF
@@ -98,6 +104,18 @@ class MapData(object):
 
         return index,tileID, cellX, cellY, (x1, y1), (x2, y2), flipX, flipY, flipD
 
+    def CalculateIndex(self,cellX,cellY):
+        return cellY*self.mapWidth + cellX
+
+    def CalculateAdjacentCells(self,index):
+        cellX = index % self.mapWidth
+        cellY = index / self.mapWidth
+        north = self.CalculateIndex(cellX + 0, cellY - 1)
+        south = self.CalculateIndex(cellX + 0, cellY + 1)
+        east  = self.CalculateIndex(cellX + 1, cellY + 0)
+        west  = self.CalculateIndex(cellX - 1, cellY + 0)
+
+        return (north, east, south, west)
 
     def Overlaps(self, topLeft, botRight, sTopLeft, sBotRight):
         x1, y1 = topLeft
@@ -366,9 +384,49 @@ class MapData(object):
         print '--------------------------------------------------- '
         print
 
-    def CalculateCellObjects(self):
-        # Determine ALL the objects that are stored in this cell.
-        pass
+    def ClusterObjectTypes(self,objectDict):
+        cellIdxs = objectDict.keys()
+        objectID = 0
+        objects = {}
+        while len(cellIdxs) > 0:
+            queue = []
+            c0 = cellIdxs[0]
+            queue.append(c0)
+            cellIdxs.remove(c0)
+            objectType = objectDict[c0]
+            objectID += 1
+            objects[objectID] = [objectType]
+            while len(queue) > 0:
+                q0 = queue[0]
+                queue.remove(q0)
+                if objectDict[q0] != objectType:
+                    # Not the type we are looking for.
+                    continue
+                # Must be a keeper
+                objects[objectID].append(q0)
+                # Remove it from future consideration.
+                if q0 in cellIdxs:
+                    cellIdxs.remove(q0)
+                for adj in self.CalculateAdjacentCells(q0):
+                    if adj in cellIdxs and objectDict[adj] == objectType and adj not in queue:
+                        queue.append(adj)
+        return objects
+
+
+    def CalculateGameObjects(self):
+        # Determine all the objects in the game.  Assign the
+        # user markers for all of them.
+        tempDict = {}
+        for cellIdx in self.layerDict["Objects"]:
+            idx,tileID,cellX,cellY,topLeft,botRight,flipX,flipY,fliD = self.layerDict["Objects"][cellIdx]
+            # Lookup the OBJECT_TYPE from the tile information.
+            objectType,localID = self.tileDict[tileID]
+            tempDict[cellIdx] = objectType
+        # Now we have a dictionary indexed by cells with each of the object types as the
+        # data.  What we want to do is "cluster" these by object type.
+        objects = self.ClusterObjectTypes(tempDict)
+        for key in objects:
+            print key, objects[key]
 
     # This function drives all the data extraction.
     def ParseTMXData(self, fileName):
@@ -412,6 +470,8 @@ class MapData(object):
 
         self.DumpCellInfo()
         self.DumpRoomInfo()
+
+        self.CalculateGameObjects()
 
         return True
 
