@@ -36,6 +36,32 @@ class MapData(object):
                        "Door_Activators",
                        "Use_Markers",
                        "Blocked"]
+    EXPECTED_GAME_OBJECTS = [
+        "ARMORY",
+        "CARGO",
+        "COMMON_TABLE",
+        "COMPUTER_CONTROLS",
+        "COMPUTER_CORE",
+        "CREW_CONTROLS",
+        "CRYOSLEEP",
+        "DANCE_FLOOR",
+        "DRONE_BAY",
+        "ENGINES",
+        "ENGINE_CONTROLS",
+        "ENTERTAINMENT_CENTER",
+        "FOOD_SERVICE",
+        "HEALING_PLATFORM",
+        "LOCKER",
+        "MAIN_VIEWSCREEN",
+        "MEDICAL_CABINET",
+        "SHUTTLE",
+        "SHUTTLE_GEN",
+        "SPARE_PARTS",
+        "TELEPORT",
+        "TERMINAL",
+        "WORK_BENCH",
+    ]
+
     # Constructor
     def __init__(self):
         self.SetDefaults()
@@ -47,6 +73,7 @@ class MapData(object):
         self.tileHeight = 0
         self.mapWidth = 0
         self.mapHeight = 0
+        self.subjectID = 0
 
         # ---------------------------------------------------
         # The following variables are used to
@@ -68,6 +95,8 @@ class MapData(object):
         # A dictionary containing a tuple of the index, cellX, and
         # cellY for each cell that in the room.
         self.roomCell = {}
+        # A dictionary with all the game objects information.
+        self.gameObjectDict = {}
 
 
         # ---------------------------------------------------
@@ -386,7 +415,6 @@ class MapData(object):
 
     def ClusterObjectTypes(self,objectDict):
         cellIdxs = objectDict.keys()
-        objectID = 0
         objects = {}
         while len(cellIdxs) > 0:
             queue = []
@@ -394,8 +422,8 @@ class MapData(object):
             queue.append(c0)
             cellIdxs.remove(c0)
             objectType = objectDict[c0]
-            objectID += 1
-            objects[objectID] = [objectType]
+            self.subjectID += 1
+            objects[self.subjectID] = [objectType]
             while len(queue) > 0:
                 q0 = queue[0]
                 queue.remove(q0)
@@ -403,7 +431,7 @@ class MapData(object):
                     # Not the type we are looking for.
                     continue
                 # Must be a keeper
-                objects[objectID].append(q0)
+                objects[self.subjectID].append(q0)
                 # Remove it from future consideration.
                 if q0 in cellIdxs:
                     cellIdxs.remove(q0)
@@ -418,15 +446,40 @@ class MapData(object):
         # user markers for all of them.
         tempDict = {}
         for cellIdx in self.layerDict["Objects"]:
-            idx,tileID,cellX,cellY,topLeft,botRight,flipX,flipY,fliD = self.layerDict["Objects"][cellIdx]
+            idx,tileID,cellX,cellY,topLeft,botRight,flipX,flipY,flipD = self.layerDict["Objects"][cellIdx]
             # Lookup the OBJECT_TYPE from the tile information.
             objectType,localID = self.tileDict[tileID]
             tempDict[cellIdx] = objectType
         # Now we have a dictionary indexed by cells with each of the object types as the
         # data.  What we want to do is "cluster" these by object type.
         objects = self.ClusterObjectTypes(tempDict)
-        for key in objects:
-            print key, objects[key]
+        # Objects are clustered.  The key is the subjectID and the data are the
+        # name of the object and the cells it is "in".
+        # We need to invert this and turn this into a dictionary
+        # with the object type as the key and content as a list of dictionaries, each
+        # dictionary containing the information about ONE game object.
+        goDict = {}
+        for goType in MapData.EXPECTED_GAME_OBJECTS:
+            goDict[goType] = []
+        for subjectID in objects:
+            goType = objects[subjectID][0]
+            goCells = objects[subjectID][1:]
+            goRoom = self.cellInfoDict[goCells[0]]["Room"]
+            goDict[goType].append({"Room":goRoom,"Cells":goCells,"SubjectID":subjectID})
+        self.gameObjectDict = goDict
+        return True
+
+    def DumpGameObjectInfo(self):
+        gameObjectDict = self.gameObjectDict
+        keys = gameObjectDict.keys()
+        keys.sort()
+        print '----------------- GAME OBJECT INFO ------------------ '
+        for key in keys:
+            print "Game Object %s ----------"%key
+            for go in gameObjectDict[key]:
+                print " - ",go
+        print '----------------------------------------------------- '
+        print
 
     # This function drives all the data extraction.
     def ParseTMXData(self, fileName):
@@ -468,10 +521,13 @@ class MapData(object):
             return False
         self.DumpRoomCellsInfo()
 
+
         self.DumpCellInfo()
         self.DumpRoomInfo()
 
-        self.CalculateGameObjects()
+        if not self.CalculateGameObjects():
+            return False
+        self.DumpGameObjectInfo()
 
         return True
 
