@@ -83,20 +83,12 @@ class MapData(object):
         # The XML Tree used to hold the original file
         # data.  Set to None by default.
         self.tree = None
-        # A dictionary with each piece of node information,
-        # keyed by its node index.
-        self.nodeDict = {}
-        # A dictionary with each piece of room information
-        # keyed by its room name
-        self.roomObjectDict = {}
         # A dictionary of the tileset used for the map,
         # keyed by the tileID
         self.tileDict = {}
         # A dictionary containing a tuple of the index, cellX, and
         # cellY for each cell that in the room.
         self.roomCell = {}
-        # A dictionary with all the game objects information.
-        self.gameObjectDict = {}
 
 
         # ---------------------------------------------------
@@ -117,7 +109,7 @@ class MapData(object):
         # This dictionary keeps track of all the information for each object and
         # assigns an ID to each object (incrementing integer).  This is used as a
         # reference for later.
-        self.objectInfoDict = {}
+        self.gameObjectDict = {}
 
     def CalcNodeData(self, index, gid):
         tileID = gid & 0x00FFFFFF
@@ -161,14 +153,14 @@ class MapData(object):
             return False
         return True
 
-    def ExtractRoomObjectsInformation(self):
+    def ExtractRoomBoundsInformation(self):
         # No tree = No Work
         if not self.tree:
             print "No tree to extract data from!"
             return False
         # A dictionary of the tile IDs and the type of
         # OBJECT_TYPE they map to.
-        roomObjectDict = {}
+        roomInfoDict = {}
         # Bring in the tileset data.  We only
         # support ONE tileset currently.
         root = self.tree.getroot()
@@ -200,19 +192,9 @@ class MapData(object):
                     continue
                 if property[0].attrib['name'] == "ROOM":
                     roomName = property[0].attrib['value']
-                    roomObjectDict[roomName] = { 'BOUNDS':((x,y),(x+width,y+height)) }
-        self.roomObjectDict = roomObjectDict
+                    roomInfoDict[roomName] = { 'Bounds':((x,y),(x+width,y+height)) }
+        self.roomInfoDict = roomInfoDict
         return True
-
-    def DumpRoomObjectInfo(self):
-        roomObjectDict = self.roomObjectDict
-        keys = roomObjectDict.keys()
-        keys.sort()
-        print '----------------- ROOM INFO ------------------ '
-        for key in keys:
-            print "Room [%s] = %s." % (key, roomObjectDict[key])
-        print '---------------------------------------------- '
-        print
 
     def ExtractLayerInformation(self):
         # There are certain layers that are
@@ -350,13 +332,13 @@ class MapData(object):
         #
         # This is a BRUTE FORCE algorithm.
         roomCells = { "HALLWAY":[]}
-        for room in self.roomObjectDict:
+        for room in self.roomInfoDict:
             roomCells[room] = []
         for tileIndex in self.layerDict['Floor']:
             index, tileID, cellX, cellY, topLeft, botRight, flipX, flipY, flipD = self.layerDict['Floor'][tileIndex]
             found = False
-            for room in self.roomObjectDict:
-                rTopLeft, rBotRight = self.roomObjectDict[room]['BOUNDS']
+            for room in self.roomInfoDict:
+                rTopLeft, rBotRight = self.roomInfoDict[room]['Bounds']
                 if self.Overlaps(topLeft,botRight,rTopLeft,rBotRight):
                     roomCells[room].append((index,cellX,cellY))
                     found = True
@@ -375,43 +357,16 @@ class MapData(object):
         # tile that was found.  Anything NOT in a room should throw
         # an error later on.
         for room in roomCells.keys():
-            self.roomInfoDict[room] = { "Cells":[] }
+            # We don't have the hallway in the object room list.
+            # We need to add it.
+            if not self.roomInfoDict.has_key(room):
+                self.roomInfoDict[room] = {}
+            self.roomInfoDict[room]["Cells"] = []
             for index,cellX,cellY in roomCells[room]:
-                self.cellInfoDict[index] = { "Cell":(cellX,cellY), "Room":room }
+                self.cellInfoDict[index] = { "Cell":(cellX,cellY), "Room":room, "Objects":[] }
                 self.roomInfoDict[room]["Cells"].append(index)
         return True
 
-    def DumpRoomCellsInfo(self):
-        roomCells = self.roomCells
-        keys = roomCells.keys()
-        keys.sort()
-        print '----------------- ROOM CELL INFO ------------------ '
-        for key in keys:
-            for index,cellX,cellY in roomCells[key]:
-                print "Room: %s Cell (%d,%d) Index %d."%(key,cellX,cellY,index)
-            print
-        print '--------------------------------------------------- '
-        print
-
-    def DumpCellInfo(self):
-        cellInfoDict = self.cellInfoDict
-        keys = cellInfoDict.keys()
-        keys.sort()
-        print '----------------- CELL INFO ------------------ '
-        for key in keys:
-            print "Cell %d - %s"%(key,cellInfoDict[key])
-        print '--------------------------------------------------- '
-        print
-
-    def DumpRoomInfo(self):
-        roomInfoDict = self.roomInfoDict
-        keys = roomInfoDict.keys()
-        keys.sort()
-        print '----------------- ROOM INFO ------------------ '
-        for key in keys:
-            print "Room %s - %s" % (key, roomInfoDict[key])
-        print '--------------------------------------------------- '
-        print
 
     def ClusterObjectTypes(self,objectDict):
         cellIdxs = objectDict.keys()
@@ -465,9 +420,54 @@ class MapData(object):
             goType = objects[subjectID][0]
             goCells = objects[subjectID][1:]
             goRoom = self.cellInfoDict[goCells[0]]["Room"]
+            # Add the information to the dictionary for the game object.
             goDict[goType].append({"Room":goRoom,"Cells":goCells,"SubjectID":subjectID})
+            # Update the cell information to add this object.
+            for cell in goCells:
+                self.cellInfoDict[cell]["Objects"].append((goType,subjectID))
         self.gameObjectDict = goDict
         return True
+
+
+    def DumpRoomCellsInfo(self):
+        roomCells = self.roomCells
+        keys = roomCells.keys()
+        keys.sort()
+        print '----------------- ROOM CELL INFO ------------------ '
+        for key in keys:
+            for index, cellX, cellY in roomCells[key]:
+                print "Room: %s Cell (%d,%d) Index %d." % (key, cellX, cellY, index)
+            print
+        print '--------------------------------------------------- '
+        print
+
+
+    def DumpCellInfo(self):
+        cellInfoDict = self.cellInfoDict
+        keys = cellInfoDict.keys()
+        keys.sort()
+        print '----------------- CELL INFO ------------------ '
+        for key in keys:
+            print "Cell Index %d"%key
+            for subKey in cellInfoDict[key]:
+                print " - [%-10s] %s" %(subKey,cellInfoDict[key][subKey])
+            print
+        print '--------------------------------------------------- '
+        print
+
+
+    def DumpRoomInfo(self):
+        roomInfoDict = self.roomInfoDict
+        keys = roomInfoDict.keys()
+        keys.sort()
+        print '----------------- ROOM INFO ------------------ '
+        for key in keys:
+            print "Room %s ----------" % key
+            for subKey in roomInfoDict[key]:
+                print " - [%-10s] %s" % (subKey, roomInfoDict[key][subKey])
+            print
+        print '--------------------------------------------------- '
+        print
 
     def DumpGameObjectInfo(self):
         gameObjectDict = self.gameObjectDict
@@ -475,9 +475,11 @@ class MapData(object):
         keys.sort()
         print '----------------- GAME OBJECT INFO ------------------ '
         for key in keys:
-            print "Game Object %s ----------"%key
+            print "Game Object %s ----------" % key
             for go in gameObjectDict[key]:
-                print " - ",go
+                for subKey in go:
+                    print " - [%-10s] %s" % (subKey, go[subKey])
+                print
         print '----------------------------------------------------- '
         print
 
@@ -498,19 +500,15 @@ class MapData(object):
         # No reall processing or validation, yet.
         if not self.ExtractMapInfo():
             return False
-        self.DumpMapInfo()
-
+        # Pull out the tileset
         if not self.ExtractTilesetInformation():
             return False
-        self.DumpTilesetInfo()
 
-        if not self.ExtractRoomObjectsInformation():
+        if not self.ExtractRoomBoundsInformation():
             return False
-        self.DumpRoomObjectInfo()
 
         if not self.ExtractLayerInformation():
             return False
-        self.DumpLayerInfo()
 
         # Now that we have all the information, we
         # can process it into the various sets we
@@ -519,14 +517,17 @@ class MapData(object):
         # Calculate which cells are in each room.
         if not self.CalculateCellsInRooms():
             return False
-        self.DumpRoomCellsInfo()
 
-
-        self.DumpCellInfo()
-        self.DumpRoomInfo()
-
+        # Calculate the basic game object information.
         if not self.CalculateGameObjects():
             return False
+
+        self.DumpMapInfo()
+        #self.DumpTilesetInfo()
+        #self.DumpLayerInfo()
+        #self.DumpRoomCellsInfo()
+        self.DumpCellInfo()
+        self.DumpRoomInfo()
         self.DumpGameObjectInfo()
 
         return True
